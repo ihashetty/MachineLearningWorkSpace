@@ -1,0 +1,11 @@
+"ï»¿""CustomerID",Age,Gender,City,AnnualIncome,TotalSpent,MonthlyPurchases,AvgOrderValue,AppTimeMinutes,DiscountUsage,PreferredShoppingTime
+C033,49,M,Mumbai,1400000.0,980000,18,15000,155.0,Low,Night
+C097,55,M,Bangalore,1400000.0,980000,20,14500,150.0,Low,Night
+C009,55,M,Mumbai,2000000.0,1500000,22,18000,180.0,Low,Night
+C041,59,M,Mumbai,2200000.0,1700000,24,19000,190.0,Low,Night
+C073,52,M,Mumbai,1750000.0,1350000,22,16500,170.0,Low,Night
+C014,46,M,Chennai,1500000.0,1100000,20,14000,150.0,Low,Night
+C048,51,M,Mumbai,1600000.0,1200000,21,15500,160.0,Low,Night
+C054,55,M,Mumbai,1900000.0,1400000,23,17000,175.0,Low,Night
+C088,59,M,Chennai,1600000.0,1100000,21,15000,165.0,Low,Night
+C026,57,M,Bangalore,1800000.0,1250000,21,16000,165.0,Low,Night

@@ -79,22 +79,35 @@ PERSONALIZED_OFFERS = {
 
 
 class CustomerInput(BaseModel):
+    # Demographic Features
     age: float
+    gender: str  # "M" or "F"
+    city: str    # City name (e.g., "Bangalore", "Mumbai", "Delhi", "Pune")
+    
+    # Financial Features
     annual_income: float
     total_spent: float
     monthly_purchases: float
     avg_order_value: float
+    
+    # Behavioral Features
     app_time_minutes: float
+    discount_usage: str  # "Low", "Medium", "High"
+    preferred_shopping_time: str  # "Day" or "Night"
 
     class Config:
         json_schema_extra = {
             "example": {
                 "age": 35,
+                "gender": "M",
+                "city": "Mumbai",
                 "annual_income": 1200000,
                 "total_spent": 850000,
                 "monthly_purchases": 18,
                 "avg_order_value": 12000,
-                "app_time_minutes": 120
+                "app_time_minutes": 120,
+                "discount_usage": "Low",
+                "preferred_shopping_time": "Night"
             }
         }
 
@@ -118,15 +131,19 @@ def read_root():
 @app.post("/predict-segment", response_model=CustomerSegmentResponse, tags=["Prediction"])
 def predict_customer_segment(customer: CustomerInput):
     """
-    Predict customer segment based on their characteristics.
+    Predict customer segment based on comprehensive customer characteristics.
+    
+    Features Include:
+    - Demographic: Age, Gender, City
+    - Financial: Annual Income, Total Spent, Monthly Purchases, Average Order Value
+    - Behavioral: App Time, Discount Usage, Shopping Time Preference
     
     Args:
-        customer: CustomerInput object with customer details
+        customer: CustomerInput object with all customer details
     
     Returns:
         CustomerSegmentResponse with cluster prediction and personalized offers
     """
-    
     
     if kmeans_model is None or scaler is None:
         raise HTTPException(
@@ -135,40 +152,58 @@ def predict_customer_segment(customer: CustomerInput):
         )
     
     try:
+        # Encode categorical features
+        gender_encoded = 1 if customer.gender.upper() == 'M' else 0
+        discount_mapping = {'Low': 0, 'Medium': 1, 'High': 2}
+        discount_encoded = discount_mapping.get(customer.discount_usage, 0)
+        shopping_time_encoded = 1 if customer.preferred_shopping_time.lower() == 'night' else 0
         
+        # City one-hot encoding (for known cities from training data)
+        cities = ['Bangalore', 'Mumbai', 'Delhi', 'Pune']
+        city_features = [1 if customer.city == city else 0 for city in cities[1:]]  # Drop first for one-hot
+        
+        # Build feature vector in same order as training
         input_data = np.array([[
             customer.age,
+            gender_encoded,
+            discount_encoded,
+            shopping_time_encoded,
             customer.annual_income,
             customer.total_spent,
             customer.monthly_purchases,
             customer.avg_order_value,
             customer.app_time_minutes
-        ]])
+        ] + city_features])
         
-        
+        # Scale input
         input_scaled = scaler.transform(input_data)
         
-        
+        # Predict cluster
         cluster = kmeans_model.predict(input_scaled)[0]
         
-        
+        # Calculate confidence score
         distances = np.linalg.norm(input_scaled - kmeans_model.cluster_centers_, axis=1)
         min_distance = distances.min()
         max_distance = distances.max()
         confidence = ((max_distance - min_distance) / max_distance) * 100 if max_distance > 0 else 0
         
-        
+        # Get segment name
         segment_name = cluster_segments.get(cluster, f"Cluster {cluster}")
         
-        
+        # Get personalized offers
         offers = PERSONALIZED_OFFERS.get(cluster, {})
         
-        
+        # Generate business insights
         insights = {
             "risk_score": round(confidence, 2),
             "recommendation_priority": "HIGH" if cluster == 0 else ("MEDIUM" if cluster == 1 else "LOW"),
             "targeting_strategy": offers.get("recommendation", ""),
-            "estimated_ltv_category": "Premium" if cluster == 0 else ("Standard" if cluster == 1 else "Budget")
+            "estimated_ltv_category": "Premium" if cluster == 0 else ("Standard" if cluster == 1 else "Budget"),
+            "features_analyzed": {
+                "demographic": ["Age", "Gender", "City"],
+                "financial": ["Annual Income", "Total Spent", "Monthly Purchases", "Avg Order Value"],
+                "behavioral": ["App Usage Time", "Discount Sensitivity", "Shopping Time Preference"]
+            }
         }
         
         return CustomerSegmentResponse(
@@ -193,13 +228,13 @@ def predict_customer_segment(customer: CustomerInput):
 @app.post("/batch-predict", tags=["Prediction"])
 def batch_predict_segments(customers: List[CustomerInput]):
     """
-    Predict segments for multiple customers at once.
+    Predict segments for multiple customers at once with all encoded features.
     
     Args:
-        customers: List of CustomerInput objects
+        customers: List of CustomerInput objects with comprehensive customer data
     
     Returns:
-        List of CustomerSegmentResponse objects
+        List of prediction results with cluster assignments and offers
     """
     
     if kmeans_model is None or scaler is None:
@@ -211,14 +246,28 @@ def batch_predict_segments(customers: List[CustomerInput]):
     results = []
     for customer in customers:
         try:
+            # Encode categorical features
+            gender_encoded = 1 if customer.gender.upper() == 'M' else 0
+            discount_mapping = {'Low': 0, 'Medium': 1, 'High': 2}
+            discount_encoded = discount_mapping.get(customer.discount_usage, 0)
+            shopping_time_encoded = 1 if customer.preferred_shopping_time.lower() == 'night' else 0
+            
+            # City one-hot encoding
+            cities = ['Bangalore', 'Mumbai', 'Delhi', 'Pune']
+            city_features = [1 if customer.city == city else 0 for city in cities[1:]]
+            
+            # Build feature vector
             input_data = np.array([[
                 customer.age,
+                gender_encoded,
+                discount_encoded,
+                shopping_time_encoded,
                 customer.annual_income,
                 customer.total_spent,
                 customer.monthly_purchases,
                 customer.avg_order_value,
                 customer.app_time_minutes
-            ]])
+            ] + city_features])
             
             input_scaled = scaler.transform(input_data)
             cluster = kmeans_model.predict(input_scaled)[0]
@@ -233,7 +282,8 @@ def batch_predict_segments(customers: List[CustomerInput]):
                 "segment_name": segment_name,
                 "confidence_score": round(confidence, 2),
                 "discount": offers.get("discount", ""),
-                "top_offers": offers.get("offers", [])[:3]
+                "top_offers": offers.get("offers", [])[:3],
+                "status": "success"
             })
         except Exception as e:
             results.append({
